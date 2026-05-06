@@ -1,5 +1,5 @@
 {
-  "name": "Photo Assistant",
+  "name": "Resizer by NUR",
   "description": "Professional 2x2 portrait creator with AI face detection, outfit swapping, and image enhancement.",
   "requestFramePermissions": [],
   "majorCapabilities": ["image-processing", "generative-ai"]
