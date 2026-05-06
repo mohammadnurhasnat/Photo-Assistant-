@@ -129,7 +129,7 @@ export default function App() {
       ctx.fillRect(0, 0, 600, 600);
 
       ctx.drawImage(img, cropX, cropY, size, size, 0, 0, 600, 600);
-      setCroppedImage(canvas.toDataURL('image/png'));
+      setCroppedImage(canvas.toDataURL('image/jpeg', 0.95));
     };
     img.src = base64;
   };
@@ -150,7 +150,7 @@ export default function App() {
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
     try {
-      const edited = await editPortrait(croppedImage, 'image/png', outfit, randomColor);
+      const edited = await editPortrait(croppedImage, 'image/jpeg', outfit, randomColor);
       if (edited) {
         setFinalImage(edited);
       }
@@ -417,7 +417,7 @@ export default function App() {
                         <div className="flex gap-2">
                           <a 
                             href={finalImage} 
-                            download="visa-portrait.png"
+                            download="visa-portrait.jpg"
                             className="flex items-center gap-2 text-[10px] font-bold px-3 py-2 rounded-full text-white shadow-lg transition-transform active:scale-95"
                             style={{ backgroundColor: PRIMARY_COLOR }}
                           >
