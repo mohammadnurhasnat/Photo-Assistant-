@@ -263,21 +263,6 @@ export default function App() {
                       <h3 className="text-lg font-bold text-gray-900 mb-2">Professional 2x2 Format</h3>
                       
                       <AnimatePresence>
-                        {earsVisible === false && (
-                          <motion.div 
-                            initial={{ opacity: 0, y: -10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3"
-                          >
-                            <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={16} />
-                            <div>
-                              <p className="text-xs font-bold text-red-700">Ears Not Detected</p>
-                              <p className="text-[10px] text-red-600 leading-tight mt-0.5">
-                                Indian Visa rules require both ears to be visible. Please ensure hair or headscarf is behind ears and upload again.
-                              </p>
-                            </div>
-                          </motion.div>
-                        )}
                         {earsVisible === true && (
                           <motion.div 
                             initial={{ opacity: 0, scale: 0.9 }}
