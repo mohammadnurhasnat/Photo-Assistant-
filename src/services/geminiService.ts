@@ -27,7 +27,7 @@ export interface DetectionResult {
 export async function detectFace(base64Image: string, mimeType: string): Promise<DetectionResult | null> {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-flash-latest",
       contents: [
         {
           parts: [
@@ -69,7 +69,13 @@ export async function detectFace(base64Image: string, mimeType: string): Promise
       },
       earsVisible: result.earsVisible,
     };
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message?.includes("403") || error?.message?.includes("PERMISSION_DENIED")) {
+      throw new Error("API Permission Denied: Your API key doesn't have permission for this operation. Ensure you're in a supported region.");
+    }
+    if (error?.message?.includes("429") || error?.message?.includes("RESOURCE_EXHAUSTED")) {
+      throw new Error("API Quota Exceeded: You've reached the rate limit. Please wait a minute and try again.");
+    }
     console.error("Face detection failed:", error);
     return null;
   }
@@ -122,6 +128,9 @@ export async function editPortrait(
     }
     return null;
   } catch (error: any) {
+    if (error?.message?.includes("403") || error?.message?.includes("PERMISSION_DENIED")) {
+      throw new Error("API Permission Denied: Your API key doesn't have permission for this operation. Image editing might be restricted in your region.");
+    }
     if (error?.message?.includes("429") || error?.message?.includes("RESOURCE_EXHAUSTED")) {
       throw new Error("API Quota Exceeded: You've reached the rate limit for image generation. Please wait a minute and try again.");
     }

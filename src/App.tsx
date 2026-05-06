@@ -78,21 +78,29 @@ export default function App() {
 
   const handleFaceDetection = async (base64: string, mimeType: string) => {
     setIsProcessing(true);
+    setErrorMessage(null);
     setProcessStep("Speeding up & Detecting Face...");
     
-    // Optimization: Resize image before sending to Gemini for detection
-    const smallBase64 = await resizeForDetection(base64);
-    
-    const result = await detectFace(smallBase64, 'image/jpeg');
-    if (result) {
-      setEarsVisible(result.earsVisible);
-      cropImage(base64, result.box);
-    } else {
+    try {
+      // Optimization: Resize image before sending to Gemini for detection
+      const smallBase64 = await resizeForDetection(base64);
+      
+      const result = await detectFace(smallBase64, 'image/jpeg');
+      if (result) {
+        setEarsVisible(result.earsVisible);
+        cropImage(base64, result.box);
+      } else {
+        setCroppedImage(base64);
+        setEarsVisible(null);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || "Face detection failed. You can still try manual editing.");
       setCroppedImage(base64);
       setEarsVisible(null);
+    } finally {
+      setProcessStep(null);
+      setIsProcessing(false);
     }
-    setProcessStep(null);
-    setIsProcessing(false);
   };
 
   const cropImage = (base64: string, box: BoundingBox) => {
