@@ -23,6 +23,7 @@ export default function App() {
   const [processStep, setProcessStep] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'male' | 'female'>('male');
   const [earsVisible, setEarsVisible] = useState<boolean | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const resizeForDetection = (base64: string): Promise<string> => {
@@ -137,7 +138,9 @@ export default function App() {
     if (!croppedImage) return;
     
     setIsProcessing(true);
+    setErrorMessage(null);
     setProcessStep("Applying AI Transformation...");
+    setFinalImage(null);
 
     const colors = [
       "Light Blue", "Deep Maroon", "Emerald Green", "Royal Navy", "Soft Lavender", 
@@ -146,13 +149,17 @@ export default function App() {
     ];
     const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
-    const edited = await editPortrait(croppedImage, 'image/png', outfit, randomColor);
-    if (edited) {
-      setFinalImage(edited);
+    try {
+      const edited = await editPortrait(croppedImage, 'image/png', outfit, randomColor);
+      if (edited) {
+        setFinalImage(edited);
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || "An unexpected error occurred. Please try again.");
+    } finally {
+      setIsProcessing(false);
+      setProcessStep(null);
     }
-    
-    setIsProcessing(false);
-    setProcessStep(null);
   };
 
   const reset = () => {
@@ -313,6 +320,19 @@ export default function App() {
                 </div>
                 
                 <div className="grid grid-cols-1 gap-3">
+                  {errorMessage && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mb-2 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3"
+                    >
+                      <AlertTriangle className="text-red-500 shrink-0" size={18} />
+                      <div className="text-xs font-semibold text-red-700 leading-tight">
+                        {errorMessage}
+                      </div>
+                    </motion.div>
+                  )}
+                  
                   {activeTab === 'male' ? (
                     <>
                       <ActionButton 

@@ -121,7 +121,10 @@ export async function editPortrait(
       }
     }
     return null;
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message?.includes("429") || error?.message?.includes("RESOURCE_EXHAUSTED")) {
+      throw new Error("API Quota Exceeded: You've reached the rate limit for image generation. Please wait a minute and try again.");
+    }
     console.error("Image editing failed:", error);
     return null;
   }
