@@ -186,9 +186,9 @@ export default function App() {
       <header className="py-4 px-8 flex justify-between items-center border-b border-opacity-10 bg-white/50 backdrop-blur-md sticky top-0 z-10" style={{ borderColor: ACCENT_COLOR }}>
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg" style={{ backgroundColor: PRIMARY_COLOR }}>
-            <Sparkles size={22} />
+            <User size={22} />
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-gray-900">Visa Portrait AI</h1>
+          <h1 className="text-xl font-bold tracking-tight text-gray-900">Resizer by <span className="text-[#0C8493]">NUR</span></h1>
         </div>
         <div className="flex items-center gap-4">
           <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-green-50 text-green-700 text-[10px] font-bold uppercase tracking-wider rounded-md border border-green-100">
