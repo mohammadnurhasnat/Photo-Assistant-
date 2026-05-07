@@ -76,6 +76,53 @@ export default function App() {
     multiple: false
   } as any);
 
+  const adjustImageSize = (base64: string, minKB: number, maxKB: number): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        // Higher resolution to accommodate larger file size requirements
+        // 1800x1800 at high quality typically falls in the 500kb-1mb range
+        const targetDim = 1800; 
+        canvas.width = targetDim;
+        canvas.height = targetDim;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(base64);
+        
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, targetDim, targetDim);
+        ctx.drawImage(img, 0, 0, targetDim, targetDim);
+
+        let low = 0.5;
+        let high = 1.0;
+        let bestBase64 = base64;
+        
+        // Iterative approach to find quality that fits the specific 700-800KB target
+        for (let i = 0; i < 8; i++) {
+          const mid = (low + high) / 2;
+          const result = canvas.toDataURL('image/jpeg', mid);
+          const sizeKB = (result.length * 0.75) / 1024;
+          
+          bestBase64 = result;
+          
+          if (sizeKB >= minKB && sizeKB <= maxKB) {
+            break;
+          }
+          
+          if (sizeKB < minKB) {
+            low = mid;
+            // If quality already at max and still too small, we need higher resolution
+            if (mid > 0.99) break; 
+          } else {
+            high = mid;
+          }
+        }
+        resolve(bestBase64);
+      };
+      img.src = base64;
+    });
+  };
+
   const handleFaceDetection = async (base64: string, mimeType: string) => {
     setIsProcessing(true);
     setErrorMessage(null);
@@ -88,14 +135,16 @@ export default function App() {
       const result = await detectFace(smallBase64, 'image/jpeg');
       if (result) {
         setEarsVisible(result.earsVisible);
-        cropImage(base64, result.box);
+        await cropImage(base64, result.box);
       } else {
-        setCroppedImage(base64);
+        const sized = await adjustImageSize(base64, 700, 800);
+        setCroppedImage(sized);
         setEarsVisible(null);
       }
     } catch (err: any) {
       setErrorMessage(err.message || "Face detection failed. You can still try manual editing.");
-      setCroppedImage(base64);
+      const sized = await adjustImageSize(base64, 700, 800);
+      setCroppedImage(sized);
       setEarsVisible(null);
     } finally {
       setProcessStep(null);
@@ -104,42 +153,43 @@ export default function App() {
   };
 
   const cropImage = (base64: string, box: BoundingBox) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
+    return new Promise<void>((resolve) => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return resolve();
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve();
 
-      const ymin = (box.ymin / 1000) * img.height;
-      const xmin = (box.xmin / 1000) * img.width;
-      const ymax = (box.ymax / 1000) * img.height;
-      const xmax = (box.xmax / 1000) * img.width;
+        const ymin = (box.ymin / 1000) * img.height;
+        const xmin = (box.xmin / 1000) * img.width;
+        const ymax = (box.ymax / 1000) * img.height;
+        const xmax = (box.xmax / 1000) * img.width;
 
-      const faceWidth = xmax - xmin;
-      const faceHeight = ymax - ymin;
-      const centerX = xmin + faceWidth / 2;
-      const centerY = ymin + faceHeight / 2;
+        const faceWidth = xmax - xmin;
+        const faceHeight = ymax - ymin;
+        const centerX = xmin + faceWidth / 2;
+        const centerY = ymin + faceHeight / 2;
 
-      // Professional headshot ratios based on reference
-      // Size the crop so the face height is about 55-60% of the total frame
-      const size = faceHeight * 1.7;
-      
-      // Horizontal centering, vertical offset to match reference (eyes at ~60% from bottom)
-      const cropX = centerX - size / 2;
-      const cropY = centerY - (size * 0.45); 
+        const size = faceHeight * 1.7;
+        const cropX = centerX - size / 2;
+        const cropY = centerY - (size * 0.45); 
 
-      canvas.width = 600;
-      canvas.height = 600;
-      
-      ctx.fillStyle = "white";
-      ctx.fillRect(0, 0, 600, 600);
-
-      ctx.drawImage(img, cropX, cropY, size, size, 0, 0, 600, 600);
-      setCroppedImage(canvas.toDataURL('image/jpeg', 0.95));
-    };
-    img.src = base64;
+        canvas.width = 1200; // Increased base resolution
+        canvas.height = 1200;
+        
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, 1200, 1200);
+        ctx.drawImage(img, cropX, cropY, size, size, 0, 0, 1200, 1200);
+        
+        const tempBase64 = canvas.toDataURL('image/jpeg', 0.95);
+        const sized = await adjustImageSize(tempBase64, 700, 800);
+        setCroppedImage(sized);
+        resolve();
+      };
+      img.src = base64;
+    });
   };
 
   const handleEdit = async (outfit: OutfitType) => {
@@ -160,7 +210,8 @@ export default function App() {
     try {
       const edited = await editPortrait(croppedImage, 'image/jpeg', outfit, randomColor);
       if (edited) {
-        setFinalImage(edited);
+        const sized = await adjustImageSize(edited, 700, 800);
+        setFinalImage(sized);
       }
     } catch (err: any) {
       setErrorMessage(err.message || "An unexpected error occurred. Please try again.");
