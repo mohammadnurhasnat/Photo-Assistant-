@@ -5,8 +5,9 @@
 
 import React, { useState, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, User, Sparkles, Shirt, FileType, Check, Loader2, RotateCcw, LayoutGrid, AlertTriangle } from 'lucide-react';
+import { Upload, User, Sparkles, Shirt, FileType, Check, Loader2, RotateCcw, LayoutGrid, AlertTriangle, Crop as CropIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import Cropper from 'react-easy-crop';
 import { cn } from './lib/utils';
 import { detectFace, editPortrait, BoundingBox, OutfitType, DetectionResult } from './services/geminiService';
 
@@ -24,6 +25,12 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'male' | 'female'>('male');
   const [earsVisible, setEarsVisible] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  const [isAdjustingCrop, setIsAdjustingCrop] = useState(false);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const resizeForDetection = (base64: string): Promise<string> => {
@@ -172,14 +179,25 @@ export default function App() {
         const centerX = xmin + faceWidth / 2;
         const centerY = ymin + faceHeight / 2;
 
-        const size = faceHeight * 1.7;
+        let size = faceHeight * 1.7;
+        
+        // Clamp size so it doesn't go outside the image and create white borders
+        const maxSizeX = Math.min(centerX * 2, (img.width - centerX) * 2);
+        const maxSizeYTop = centerY / 0.45;
+        const maxSizeYBottom = (img.height - centerY) / 0.55;
+        const safeSize = Math.min(maxSizeX, maxSizeYTop, maxSizeYBottom);
+        
+        if (size > safeSize) {
+          size = safeSize;
+        }
+
         const cropX = centerX - size / 2;
         const cropY = centerY - (size * 0.45); 
 
-        canvas.width = 1200; // Increased base resolution
+        canvas.width = 1200; 
         canvas.height = 1200;
         
-        ctx.fillStyle = "white";
+        ctx.fillStyle = "white"; // Fallback, shouldn't show if clamped properly
         ctx.fillRect(0, 0, 1200, 1200);
         ctx.drawImage(img, cropX, cropY, size, size, 0, 0, 1200, 1200);
         
@@ -197,21 +215,28 @@ export default function App() {
     
     setIsProcessing(true);
     setErrorMessage(null);
-    setProcessStep("Applying AI Transformation...");
+    setProcessStep(outfit === 'enhance' ? "Enhancing Image..." : "Applying AI Transformation...");
     setFinalImage(null);
 
-    const colors = [
-      "Light Blue", "Deep Maroon", "Emerald Green", "Royal Navy", "Soft Lavender", 
-      "Neutral Grey", "Charcoal", "Burgundy", "Peach", "Mint Green", 
-      "Sky Blue", "Classic Black", "Ivory White", "Rose Pink"
-    ];
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
-
     try {
-      const edited = await editPortrait(croppedImage, 'image/jpeg', outfit, randomColor);
-      if (edited) {
-        const sized = await adjustImageSize(edited, 700, 800);
+      if (outfit === 'enhance') {
+        // Use local canvas for enhancement to preserve identity 100%
+        const result = await enhanceImageLocal(croppedImage);
+        const sized = await adjustImageSize(result, 700, 800);
         setFinalImage(sized);
+      } else {
+        const colors = [
+          "Light Blue", "Deep Maroon", "Emerald Green", "Royal Navy", "Soft Lavender", 
+          "Neutral Grey", "Charcoal", "Burgundy", "Peach", "Mint Green", 
+          "Sky Blue", "Classic Black", "Ivory White", "Rose Pink"
+        ];
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+        
+        const edited = await editPortrait(croppedImage, 'image/jpeg', outfit, randomColor);
+        if (edited) {
+          const sized = await adjustImageSize(edited, 700, 800);
+          setFinalImage(sized);
+        }
       }
     } catch (err: any) {
       setErrorMessage(err.message || "An unexpected error occurred. Please try again.");
@@ -221,11 +246,34 @@ export default function App() {
     }
   };
 
+  const enhanceImageLocal = (base64: string): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(base64);
+
+        // Apply sharpness and color correction
+        ctx.filter = 'contrast(1.05) saturate(1.1) brightness(1.02)';
+        ctx.drawImage(img, 0, 0);
+        
+        resolve(canvas.toDataURL('image/jpeg', 1.0));
+      };
+      img.src = base64;
+    });
+  };
+
   const reset = () => {
     setOriginalImage(null);
     setCroppedImage(null);
     setFinalImage(null);
     setEarsVisible(null);
+    setIsAdjustingCrop(false);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
   };
 
   return (
@@ -288,25 +336,63 @@ export default function App() {
                 <div className="absolute top-4 left-4 z-10 flex items-center gap-2 px-2 py-1 bg-black/40 backdrop-blur-md rounded-md text-[10px] text-white font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
                    Input Source
                 </div>
-                <div className="relative aspect-square max-w-[400px] mx-auto rounded-xl overflow-hidden bg-gray-50 ring-1 ring-gray-100">
-                  <img 
-                    src={originalImage} 
-                    alt="Original" 
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                  {isProcessing && (
-                    <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
-                      <div className="relative">
-                        <Loader2 className="animate-spin" style={{ color: PRIMARY_COLOR }} size={40} />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <Sparkles size={16} className="text-[#0C8493] animate-pulse" />
+                
+                {!isAdjustingCrop ? (
+                  <div className="relative aspect-square max-w-[400px] mx-auto rounded-xl overflow-hidden bg-gray-50 ring-1 ring-gray-100">
+                    <img 
+                      src={originalImage} 
+                      alt="Original" 
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                    {isProcessing && (
+                      <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
+                        <div className="relative">
+                          <Loader2 className="animate-spin" style={{ color: PRIMARY_COLOR }} size={40} />
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <Sparkles size={16} className="text-[#0C8493] animate-pulse" />
+                          </div>
                         </div>
+                        <p className="text-sm font-bold tracking-tight" style={{ color: ACCENT_COLOR }}>{processStep}</p>
                       </div>
-                      <p className="text-sm font-bold tracking-tight" style={{ color: ACCENT_COLOR }}>{processStep}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="max-w-[400px] mx-auto">
+                    <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-50 ring-1 ring-gray-100 mb-4">
+                      <Cropper
+                        image={originalImage}
+                        crop={crop}
+                        zoom={zoom}
+                        aspect={1}
+                        onCropChange={setCrop}
+                        onZoomChange={setZoom}
+                        onCropComplete={onCropComplete}
+                      />
                     </div>
-                  )}
-                </div>
+                    <div className="flex items-end justify-between gap-4">
+                       <div className="flex-1">
+                           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2 block">Zoom</label>
+                           <input 
+                             type="range" 
+                             value={zoom} 
+                             min={1} 
+                             max={5} 
+                             step={0.05} 
+                             onChange={(e) => setZoom(Number(e.target.value))}
+                             className="w-full accent-[#0C8493]"
+                           />
+                       </div>
+                       <button 
+                          onClick={handleSaveManualCrop}
+                          disabled={isProcessing}
+                          className="px-4 py-2 bg-[#0C8493] text-white rounded-xl text-xs font-bold shadow-md hover:bg-[#096b78] transition-colors disabled:opacity-50"
+                       >
+                          Save Frame
+                       </button>
+                    </div>
+                  </div>
+                )}
               </section>
 
               {croppedImage && (
@@ -341,12 +427,23 @@ export default function App() {
                         )}
                       </AnimatePresence>
 
-                      <p className="text-sm text-gray-500 leading-relaxed max-w-sm">
+                      <p className="text-sm text-gray-500 leading-relaxed max-w-sm mb-3">
                         AI-positioned to match embassy standards. Head centered with correct vertical clearance.
                       </p>
-                      <div className="flex gap-2 mt-3">
-                        <span className="px-2 py-0.5 bg-gray-100 text-[10px] font-bold text-gray-500 rounded uppercase">600 PX</span>
-                        <span className="px-2 py-0.5 bg-gray-100 text-[10px] font-bold text-gray-500 rounded uppercase">300 DPI</span>
+                      <div className="flex items-center justify-between">
+                        <div className="flex gap-2">
+                          <span className="px-2 py-0.5 bg-gray-100 text-[10px] font-bold text-gray-500 rounded uppercase">600 PX</span>
+                          <span className="px-2 py-0.5 bg-gray-100 text-[10px] font-bold text-gray-500 rounded uppercase">300 DPI</span>
+                        </div>
+                        
+                        {!isAdjustingCrop && (
+                            <button 
+                                onClick={() => setIsAdjustingCrop(true)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-lg border border-gray-200 transition-colors shadow-sm"
+                            >
+                                <CropIcon size={14} /> Adjust Framing
+                            </button>
+                        )}
                       </div>
                     </div>
                   </div>
